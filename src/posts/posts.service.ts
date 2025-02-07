@@ -1,4 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Repository } from 'typeorm';
+import { PostsModel } from './entities/posts.entity';
+import { InjectRepository } from '@nestjs/typeorm';
 
 export interface PostModel {
   id: number;
@@ -9,6 +12,7 @@ export interface PostModel {
   commentCount: number;
 }
 
+/*
 let posts: PostModel[] = [
   {
     id: 1,
@@ -35,15 +39,28 @@ let posts: PostModel[] = [
     commentCount: 999999,
   },
 ];
+*/
 
 @Injectable()
 export class PostsService {
-  getAllposts() {
-    return posts;
+  constructor(
+    @InjectRepository(PostsModel)
+    private readonly postRepository: Repository<PostsModel>,
+  ) {}
+
+  async getAllposts() {
+    return this.postRepository.find({
+      relations: ['author'],
+    });
   }
 
-  getPostById(id: number) {
-    const post = posts.find((post) => post.id === +id);
+  async getPostById(id: number) {
+    const post = await this.postRepository.findOne({
+      where: {
+        id,
+      },
+      relations: ['author'],
+    });
 
     if (!post) {
       throw new NotFoundException();
@@ -52,29 +69,31 @@ export class PostsService {
     return post;
   }
 
-  createPost(author: string, title: string, content: string) {
-    const post: PostModel = {
-      id: posts[posts.length - 1].id + 1,
-      author,
+  async createPost(authorId: number, title: string, content: string) {
+    const post = this.postRepository.create({
+      author: {
+        id: authorId,
+      },
       title,
       content,
       likeCount: 0,
       commentCount: 0,
-    };
+    });
 
-    posts = [...posts, post];
-    return post;
+    const newPost = await this.postRepository.save(post);
+
+    return newPost;
   }
 
-  updatePost(postId: number, author: string, title: string, content: string) {
-    const post = posts.find((post) => post.id === +postId);
+  async updatePost(postId: number, title: string, content: string) {
+    const post = await this.postRepository.findOne({
+      where: {
+        id: postId,
+      },
+    });
 
     if (!post) {
       throw new NotFoundException();
-    }
-
-    if (author) {
-      post.author = author;
     }
 
     if (title) {
@@ -85,21 +104,23 @@ export class PostsService {
       post.content = content;
     }
 
-    posts = posts.map((prevPost) =>
-      prevPost.id === +postId ? post : prevPost,
-    );
+    const newPost = await this.postRepository.save(post);
 
-    return post;
+    return newPost;
   }
 
-  deletePost(postId: number) {
-    const post = posts.find((post) => post.id === +postId);
+  async deletePost(postId: number) {
+    const post = await this.postRepository.findOne({
+      where: {
+        id: postId,
+      },
+    });
 
     if (!post) {
       throw new NotFoundException();
     }
 
-    posts = posts.filter((post) => post.id !== +postId);
+    await this.postRepository.delete(postId);
 
     return postId;
   }
